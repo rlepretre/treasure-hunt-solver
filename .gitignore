@@ -1,0 +1,5 @@
+.input
+debug
+__pycache__
+log/*
+.env

@@ -1,0 +1,10 @@
+# Core Python libraries for window interaction and system information
+pygetwindow>=0.0.9
+pyautogui>=0.9.53
+opencv-python>=4.5.5
+pywin32>=302
+psutil>=5.8.0
+
+# Additional dependencies
+numpy>=1.22.0
+Pillow>=9.0.0
