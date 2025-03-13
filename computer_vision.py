@@ -2,7 +2,6 @@ import logging
 import math
 import os
 import re
-import time
 from datetime import datetime
 
 import cv2
@@ -25,31 +24,18 @@ logger = logging.getLogger("computer_vision")
 
 
 def extract_coordinates(ocr_result):
-    coordinates = ocr_result[1][1].replace("~", "-").replace(" ", "")
+    coordinates = ocr_result[0][1].replace("~", "-").replace(" ", "")
 
-    pattern = r"^-?\d{1,2},-?\d{1,2}$"
+    pattern = r"(-?\d{1,2}),(-?\d{1,2})"
+    match = re.search(pattern, coordinates)
 
-    # Example usage:
-    if re.match(pattern, coordinates):
-        logger.info(f"Valid coordinates format: {coordinates}")
-        print("Valid format: ")
-        print(coordinates.split(","))
-        return coordinates.split(",")
+    if match:
+        x, y = match.groups()
+        logger.info(f"Valid coordinates format: {x},{y}")
+        return [x, y]
     else:
-        logger.warning(
-            f"Invalid coordinates format: {ocr_result[1][1]}, {ocr_result[2][1]}"
-        )
-        print("Invalid format")
-        print(
-            (
-                ocr_result[1][1].replace(",", "").strip(),
-                ocr_result[2][1].replace(",", "").strip(),
-            )
-        )
-        return (
-            ocr_result[1][1].replace(",", "").strip(),
-            ocr_result[2][1].replace(",", "").strip(),
-        )
+        logger.warning(f"Invalid coordinates format: {ocr_result[0][1]}")
+        return None
 
 
 def read_image_text(image):
@@ -60,50 +46,63 @@ def read_image_text(image):
     crop_height = height // 2
     crop_width = (width // 8) + 50
     cropped_image = image[0:crop_height, 0:crop_width]
+    cropped_coords = image[70:95, 0:90]
 
     # Create debug directory if it doesn't exist
     debug_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug")
     os.makedirs(debug_dir, exist_ok=True)
 
     cv2.imwrite(os.path.join(debug_dir, "cropped_image.png"), cropped_image)
+    cv2.imwrite(os.path.join(debug_dir, "cropped_coords.png"), cropped_coords)
 
     # Initialize OCR engine
-    logger.info("Initializing OCR engine")
     reader = easyocr.Reader(["fr"], gpu=True)
 
     # Time EasyOCR on cropped image
-    logger.info("Starting OCR text recognition")
-    start_time = time.time()
-    easyocr_result = reader.readtext(cropped_image)
-    end_time = time.time()
-    logger.info(f"OCR completed in {end_time - start_time:.2f} seconds")
+    easyocr_hints = reader.readtext(
+        cropped_image,
+        contrast_ths=0.2,
+        text_threshold=0.6,
+        low_text=0.3,
+        width_ths=0.5,
+    )
+    easyocr_coords = reader.readtext(
+        cropped_coords,
+        contrast_ths=0.1,  # Lower this to detect more low-contrast characters
+        text_threshold=0.5,  # Lower to be more lenient with character detection
+        low_text=0.2,  # Lower to better detect small characters like minus signs
+        width_ths=1.2,  # Slightly increase to better group characters
+        add_margin=0.1,  # Add some margin around the text
+        paragraph=False,  # Ensure characters aren't incorrectly grouped
+    )
 
-    # Log all detected text
-    for idx, (bbox, text, conf) in enumerate(easyocr_result):
-        logger.info(f"OCR detected text #{idx}: '{text}' (confidence: {conf:.2f})")
+    for detection in easyocr_coords:
+        logger.info(f"OCR detected text: '{detection[1]}' (confidence: {detection[2]:.2f})")
 
-    coordinates = extract_coordinates(easyocr_result)
+    coordinates = extract_coordinates(easyocr_coords)
     logger.info(f"Extracted coordinates: {coordinates}")
 
     hint = None
     hint_box = None
-    for i, detection in enumerate(easyocr_result):
-        if "EN COUR" in detection[1]:
-            hint = easyocr_result[i - 1][1]
-            hint_box = easyocr_result[i - 1][0]
-            logger.info(f"Detected hint: '{hint}'")
+    for i, detection in enumerate(easyocr_hints):
+        logger.info(f"OCR detected text: '{detection[1]}' (confidence: {detection[2]:.2f})")
+        if "EN COURS" == detection[1].replace("0", "").replace("@", "").strip():
+            hint = easyocr_hints[i - 1][1]
+            hint_box = easyocr_hints[i - 1][0]
+        elif "EN COURS" in detection[1]:
+            # replace EN COURS and 0 in case it is include in captured text
+            # (The location logo is sometimes detected as 0)
+            hint = detection[1].replace("EN COURS", "").replace("0", "").replace("@", "").strip()
+            hint_box = detection[0]
 
     hint = remove_accents(hint.replace("œ", "oe").replace("'", ""))
     return cropped_image, coordinates, hint, hint_box
 
 
 def identify_arrow_direction(image, hint_box):
-    logger.info("Identifying arrow direction")
     hint_top_left = hint_box[0]
     hint_bot_left = hint_box[3]
-    arrow_crop = image[
-        hint_top_left[1] - 2 : hint_bot_left[1] + 20, 10 : hint_top_left[0]
-    ]
+    arrow_crop = image[hint_top_left[1] - 20 : hint_bot_left[1] + 20, 10 : hint_top_left[0]]
 
     # Create debug directory if it doesn't exist
     debug_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug")
@@ -167,14 +166,8 @@ def identify_arrow_direction(image, hint_box):
         point = point[0]
         dist_to_centroid = math.sqrt((point[0] - cx) ** 2 + (point[1] - cy) ** 2)
         if farthest_point is not None:
-            dist_to_farthest = math.sqrt(
-                (point[0] - farthest_point[0]) ** 2
-                + (point[1] - farthest_point[1]) ** 2
-            )
-            if (
-                dist_to_centroid > second_max_dist
-                and dist_to_farthest > min_distance_between_extremities
-            ):
+            dist_to_farthest = math.sqrt((point[0] - farthest_point[0]) ** 2 + (point[1] - farthest_point[1]) ** 2)
+            if dist_to_centroid > second_max_dist and dist_to_farthest > min_distance_between_extremities:
                 second_max_dist = dist_to_centroid
                 second_farthest_point = point
 
@@ -192,13 +185,9 @@ def identify_arrow_direction(image, hint_box):
 
         for point in arrow_contour:
             point = point[0]
-            dist_to_farthest = math.sqrt(
-                (point[0] - farthest_point[0]) ** 2
-                + (point[1] - farthest_point[1]) ** 2
-            )
+            dist_to_farthest = math.sqrt((point[0] - farthest_point[0]) ** 2 + (point[1] - farthest_point[1]) ** 2)
             dist_to_second = math.sqrt(
-                (point[0] - second_farthest_point[0]) ** 2
-                + (point[1] - second_farthest_point[1]) ** 2
+                (point[0] - second_farthest_point[0]) ** 2 + (point[1] - second_farthest_point[1]) ** 2
             )
 
             if dist_to_farthest < radius:

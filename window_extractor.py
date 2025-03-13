@@ -19,9 +19,7 @@ class WindowInformationExtractor:
         :param window_title: Title or partial title of the window to analyze
         """
         self.window = None
-        logger.info(
-            f"Initializing WindowInformationExtractor with title: {window_title}"
-        )
+
         self.find_window(window_title)
 
     def find_window(self, window_title):
@@ -31,7 +29,6 @@ class WindowInformationExtractor:
         :param window_title: Title or partial title of the window
         """
         if window_title:
-            logger.info(f"Searching for window with title containing: {window_title}")
             # Find windows matching the title (case-insensitive)
             matching_windows = [
                 w for w in gw.getAllTitles() if window_title.lower() in w.lower()
@@ -49,7 +46,6 @@ class WindowInformationExtractor:
 
             # Activate and bring the window to the foreground
             self.window.activate()
-            logger.info("Window activated")
         else:
             logger.warning("No window title specified. Please provide a window title.")
             print("No window title specified. Please provide a window title.")
@@ -71,13 +67,9 @@ class WindowInformationExtractor:
             self.window.width,
             self.window.height,
         )
-        logger.info(
-            f"Capturing window at position ({x}, {y}) with size {width}x{height}"
-        )
 
         # Capture the specific window area
         screenshot = pyautogui.screenshot(region=(x, y, width, height))
-        logger.info("Window screenshot captured successfully")
 
         # Convert PIL Image to numpy array for OpenCV compatibility
         return cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
@@ -91,8 +83,6 @@ class WindowInformationExtractor:
         if not self.window:
             logger.error("No window selected")
             raise ValueError("No window selected")
-
-        logger.info(f"Getting details for window: {self.window.title}")
 
         try:
             # Get window handle
