@@ -8,8 +8,8 @@ from datetime import datetime
 import keyboard
 import pyperclip
 
-from api_queries import find_distance, parse_response_to_dict, send_dofusdb_request
-from computer_vision import identify_arrow_direction, read_image_text
+from api import API
+from image_reader import ImageReader
 from window_extractor import WindowInformationExtractor
 
 # Setup logging for main application
@@ -30,30 +30,29 @@ def process_image():
         start = time.process_time()
         window = WindowInformationExtractor("Ina")
         image = window.capture_window()
-        # Create debug directory if it doesn't exist
-        os.makedirs("debug", exist_ok=True)
 
-        cropped_image, current_coords, hint, hint_box = read_image_text(image)
-        logger.info(f"Current coordinates: {current_coords}, Hint: {hint}")
+        image_reader = ImageReader(image)
+        current_coords = image_reader.get_coordinates()
+        hint = image_reader.get_hint()
+        direction = image_reader.get_arrow_direction()
 
-        direction = identify_arrow_direction(cropped_image, hint_box)
+        logger.info(f"Current coordinates: {current_coords}, Hint: {hint}, Direction: {direction}")
 
-        response = send_dofusdb_request(current_coords, direction)
-        distances, partial_matches = parse_response_to_dict(response)
-        # Find the first key that contains the hint string
+        api = API()
+        hint_distance = api.find_distance(hint, current_coords, direction)
 
-        hint_distance = find_distance(hint, distances, partial_matches)
+        if hint_distance is None:
+            return
 
         target_coords = current_coords.copy()
-        print(hint_distance)
 
-        if direction == 0:  # right
+        if direction == "RIGHT":
             target_coords[0] = int(target_coords[0]) + int(hint_distance)
-        elif direction == 2:  # down
+        elif direction == "DOWN":
             target_coords[1] = int(target_coords[1]) + int(hint_distance)
-        elif direction == 4:  # left
+        elif direction == "LEFT":
             target_coords[0] = int(target_coords[0]) - int(hint_distance)
-        elif direction == 6:  # up
+        elif direction == "UP":
             target_coords[1] = int(target_coords[1]) - int(hint_distance)
 
         pyperclip.copy(f"/travel {target_coords[0]} {target_coords[1]}")
