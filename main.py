@@ -39,21 +39,7 @@ def process_image():
         logger.info(f"Current coordinates: {current_coords}, Hint: {hint}, Direction: {direction}")
 
         api = API()
-        hint_distance = api.find_distance(hint, current_coords, direction)
-
-        if hint_distance is None:
-            return
-
-        target_coords = current_coords.copy()
-
-        if direction == "RIGHT":
-            target_coords[0] = int(target_coords[0]) + int(hint_distance)
-        elif direction == "DOWN":
-            target_coords[1] = int(target_coords[1]) + int(hint_distance)
-        elif direction == "LEFT":
-            target_coords[0] = int(target_coords[0]) - int(hint_distance)
-        elif direction == "UP":
-            target_coords[1] = int(target_coords[1]) - int(hint_distance)
+        target_coords = api.get_hint_coordinates(current_coords, direction, hint)
 
         pyperclip.copy(f"/travel {target_coords[0]} {target_coords[1]}")
         winsound.PlaySound("assets/notif.wav", winsound.SND_FILENAME)

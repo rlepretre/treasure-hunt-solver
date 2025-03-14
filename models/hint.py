@@ -12,7 +12,7 @@ class Hint:
         self.text = self._remove_accents(self.text)
         return self.text
 
-    def _remove_accents(text):
+    def _remove_accents(self, text):
         return "".join(
             c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn"
         )
