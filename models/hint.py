@@ -10,7 +10,7 @@ class Hint:
     def sanitize(self):
         self.text = self.text.replace("œ", "oe").replace("'", "").strip()
         self.text = self._remove_accents(self.text)
-        return self.text
+        return self
 
     def _remove_accents(self, text):
         return "".join(
@@ -18,7 +18,7 @@ class Hint:
         )
 
     def __str__(self):
-        return f"{self.text} ({self.confidence:.2f})"
+        return f"{self.text}"
 
     def __repr__(self):
-        return f"{self.text} ({self.confidence:.2f})"
+        return f"{self.text}"

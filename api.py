@@ -4,7 +4,7 @@ import sqlite3
 
 import pandas as pd
 
-from models import Hint
+from models import Coordinates, Hint
 
 
 class API:
@@ -17,7 +17,7 @@ class API:
 
         return items
 
-    def get_hint_coordinates(self, current_coords, direction):
+    def get_hint_coordinates(self, current_coords, direction, hint):
         query = ""
         params = (0, 0, 0)
         if direction == "RIGHT":
@@ -28,7 +28,7 @@ class API:
                 AND x BETWEEN ? AND ?
                 ORDER BY x ASC
             """
-            params = (current_coords[1], current_coords[0], current_coords[0] + 10)
+            params = (current_coords.y, current_coords.x, int(current_coords.x) + 10)
 
         elif direction == "DOWN":
             query = """
@@ -38,7 +38,7 @@ class API:
                 AND y BETWEEN ? AND ?
                 ORDER BY y ASC
             """
-            params = (current_coords[0], current_coords[1], current_coords[1] + 10)
+            params = (current_coords.x, current_coords.y, int(current_coords.y) + 10)
 
         elif direction == "LEFT":
             query = """
@@ -48,7 +48,7 @@ class API:
                 AND x BETWEEN ? AND ?
                 ORDER BY x ASC
             """
-            params = (current_coords[1], current_coords[0] - 10, current_coords[0])
+            params = (current_coords.y, int(current_coords.x) - 10, current_coords.x)
 
         elif direction == "UP":
             query = """
@@ -58,7 +58,7 @@ class API:
                 AND y BETWEEN ? AND ?
                 ORDER BY y ASC
             """
-            params = (current_coords[0], current_coords[1] - 10, current_coords[1])
+            params = (current_coords.x, int(current_coords.y) - 10, current_coords.y)
 
         cursor = self.conn.cursor()
         cursor.execute(query, params)
@@ -66,14 +66,31 @@ class API:
         hint_coords = {}
         hint_partial_match_coords = {}
         for item in items:
-            hint = Hint(item[0]).sanitize()
-            hint_coords[hint] = (item[1], item[2])
-            words = self.text.split()
-            for i in range(1, len(words) + 1):
-                for j in range(len(words) - i + 1):
-                    partial_key = " ".join(words[j : j + i])
-                    hint_partial_match_coords[partial_key] = (item[1], item[2])
-        return hint_coords, hint_partial_match_coords
+            key_hint = Hint(item[0]).sanitize()
+            coords = Coordinates(x=item[1], y=item[2])
+            if coords != current_coords:
+                if key_hint.text in hint_coords.keys():
+                    self.logger.debug(
+                        f"Check if {key_hint} ,{coords} at {coords.get_distance(current_coords)} is less than {hint_coords[key_hint.text]}{hint_coords[key_hint.text].get_distance(current_coords)}"
+                    )
+                    if coords.get_distance(current_coords) < hint_coords[
+                        key_hint.text
+                    ].get_distance(current_coords):
+                        hint_coords[key_hint.text] = coords
+                    else:
+                        coords = hint_coords[key_hint.text]
+                else:
+                    hint_coords[key_hint.text] = coords
+                words = key_hint.text.split()
+                for i in range(1, len(words) + 1):
+                    for j in range(len(words) - i + 1):
+                        partial_key = " ".join(words[j : j + i])
+                        hint_partial_match_coords[partial_key] = coords
+        target_coords = hint_coords.get(hint.text)
+        if not target_coords:
+            self.logger.info(f"Hint {hint} not found, partial match")
+            target_coords = hint_partial_match_coords.get(hint.text)
+        return target_coords
 
     def build_db(self):
         print("Building database...")

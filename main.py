@@ -39,9 +39,10 @@ def process_image():
         logger.info(f"Current coordinates: {current_coords}, Hint: {hint}, Direction: {direction}")
 
         api = API()
-        target_coords = api.get_hint_coordinates(current_coords, direction, hint)
+        target_coords = api.get_hint_coordinates(current_coords, direction, hint.sanitize())
+        logger.info(f"Target coordinates: {target_coords}")
 
-        pyperclip.copy(f"/travel {target_coords[0]} {target_coords[1]}")
+        pyperclip.copy(f"/travel {target_coords.x} {target_coords.y}")
         winsound.PlaySound("assets/notif.wav", winsound.SND_FILENAME)
         process_time = time.process_time() - start
         logger.info(f"Processing completed in {process_time:.2f} seconds")
